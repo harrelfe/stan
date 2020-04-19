@@ -11,6 +11,7 @@
       span.underline{text-decoration: underline;}
       div.column{display: inline-block; vertical-align: top; width: 50%;}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" type="text/javascript"></script>
 </head>
 <body>
 <h1 id="resources">Resources</h1>
@@ -22,5 +23,65 @@
 <li><a href="https://kevinstadler.github.io/blog/bayesian-ordinal-regression-with-random-effects-using-brms/">Multi-level ordinal regression models with brms</a></li>
 <li><a href="https://cran.r-project.org/web/packages/rstanarm/vignettes/glmer.html">Estimating generalized (non-)linear models with group-specific terms with rstanarm</a></li>
 </ul>
+<h1 id="inner-workings-of-the-bayesian-proportional-odds-model">Inner Workings of the Bayesian Proportional Odds Model</h1>
+<ul>
+<li>From Nathan James: Automatic imposition of order constraint for intercepts
+<ul>
+<li>For our Bayesian model the intuition behind the intercept ordering is that we first estimate the probabilities of being in each of the n categories (combining observed data with the Dirichlet prior) and then apply the link function to the cumulative probabilities to calculate the intercepts. Because the cumulative probabilities are ordered and the link is monotonic, the intercepts are also ordered. Here’s a few lines of example R code that illustrate the process</li>
+<li>estimated posterior prob. of membership in 7 categories (when X*beta=0)</li>
+<li>est_probs &lt;- c(0.11, 0.27, 0.16, 0.14, 0.04, 0.13, 0.15)</li>
+<li>estimated posterior cumulative probs</li>
+<li>cum_probs &lt;- cumsum(est_probs)</li>
+<li>apply logit link to cum_probs to estimate intercepts</li>
+<li>est_intercepts &lt;- qlogis(cum_probs)</li>
+</ul></li>
+</ul>
+<h1 id="general-information-about-random-effects">General Information About Random Effects</h1>
+<ul>
+<li>From Jonathan Schildcrout: Omitting random effects from a model
+<ul>
+<li>This is not bias. The two models are estimating different parameters. For Binary data there are approximations that can be used to convert between the marginal (what LRM estimates) and conditional (what random effects estimate) parameters. See Zeger Liang and Albert 1988. Not sure if that works for general ordinal data.</li>
+<li>The ZLA conversion is this</li>
+<li>Sigma = 2.04</li>
+<li>C = 16<em>sqrt(3)/(15</em>3.14)</li>
+<li>Mult = 1 / sqrt(c^2 * Sigma^2 +1) = 0.76</li>
+<li>beta.marg = Mult * beta.cond</li>
+<li>You can think of the sd of the random effects as a coefficient for a standardized covariate that was not observed: <span class="math inline">\(Logit(p_{ij}) = x_{ij} \beta + b_i\)</span>, and <span class="math inline">\(b_i ~ N(0, \sigma^2)\)</span> which means <span class="math inline">\(Logit(p_{ij}) = x_{ij} \beta + \sigma * Z_i\)</span> , and <span class="math inline">\(Z_i ~ N(0, 1)\)</span></li>
+</ul></li>
+<li>Ben Goodrich: Why not use a prior that is n(0, <span class="math inline">\(\sigma_{\gamma}\)</span>)
+<ul>
+<li>The main thing is that usually (but unfortunately not always) the MCMC goes better if you utilize the stochastic representation of the normal distribution, which entails putting the unscaled random effects in the parameters block and scaling them by sigmag in the transformed parameters block to get the scaled random effects that go into the likelihood function. Then, the unscaled random effects get a standard normal prior, which implies before you see the data that the scaled random effects are distributed normal with mean zero and standard deviation sigmag. That tends to reduce the posterior dependence between sigmag and the (unscaled) random effects. In addition, there should be a proper prior on sigmag. I put it as exponential, but you would need to pass in the prior rate from R.</li>
+</ul></li>
+</ul>
+<h1 id="mles-and-optimization-for-random-effects-models">MLEs and Optimization for Random Effects Models</h1>
+<ul>
+<li>From Ben Goodrich: Inconsistent results when using <code>rstan::optimizing</code>
+<ul>
+<li>Optimizing is not going to work well in hierarchical models that condition on the values of the random effects because (penalized) MLE is not a consistent estimator of (any of) the parameters as the number of clusters gets large. That is why Frequentists have to first integrate the random effects out of the likelihood before they can choose the fixed effects to maximize it. If you do MCMC, then the posterior means and medians should be much more stable than the modes. You can also try the vb() function, which implements variational Bayesian inference — essentially trying to find the closest multivariate normal distribution to posterior distribution in the unconstrained space — but that tends to not work well in general either.</li>
+</ul></li>
+</ul>
+<h1 id="prediction-with-random-effects">Prediction With Random Effects</h1>
+<ul>
+<li>Ben Goodrich: Everything about the random effect stuff is easier from a Bayesian perspective, except for one thing: If you want to evaluate the model based on how it is expected to predict new patients (that by definition have not been observed yet), then you have to re-calculate the log-likelihood contributions in generated quantities after numerically integrating out the random effects like the Frequentists do. This is not so bad to code now that Stan has a one-dimensional numerical integration function, but it takes doing. See https://arxiv.org/abs/1802.04452</li>
+</ul>
+<h1 id="ar1-modeling">AR(1) Modeling</h1>
+<ul>
+<li><a href="https://discourse.mc-stan.org/t/migrated-from-google-group-ar-1-logistic-regression-funnel" class="uri">https://discourse.mc-stan.org/t/migrated-from-google-group-ar-1-logistic-regression-funnel</a></li>
+<li><a href="https://discourse.mc-stan.org/t/improving-efficiency-when-modeling-autocorrelation" class="uri">https://discourse.mc-stan.org/t/improving-efficiency-when-modeling-autocorrelation</a></li>
+<li><a href="https://discourse.mc-stan.org/t/dynamic-panel-data-models-with-stan" class="uri">https://discourse.mc-stan.org/t/dynamic-panel-data-models-with-stan</a></li>
+<li><a href="https://github.com/jgabry/stancon2018helsinki_intro/tree/master/slides" class="uri">https://github.com/jgabry/stancon2018helsinki_intro/tree/master/slides</a></li>
+<li><a href="https://github.com/jgabry/stancon2018helsinki_intro/blob/master/Pest_Control_Example.Rmd" class="uri">https://github.com/jgabry/stancon2018helsinki_intro/blob/master/Pest_Control_Example.Rmd</a></li>
+<li><a href="https://mc-stan.org/docs/2_20/stan-users-guide/autoregressive-section.html" class="uri">https://mc-stan.org/docs/2_20/stan-users-guide/autoregressive-section.html</a></li>
+<li><a href="https://www.mathworks.com/help/econ/simulate-stationary-arma-processes.html" class="uri">https://www.mathworks.com/help/econ/simulate-stationary-arma-processes.html</a> (kick starting the process with unconditional mean)</li>
+<li><a href="https://www.math.utah.edu/~zhorvath/ar1.pdf" class="uri">https://www.math.utah.edu/~zhorvath/ar1.pdf</a> (recursive substitution p. 5)</li>
+</ul>
+<p>The equation in the last reference p. 5 allows specification of the random effect at time t without passing through all the previous random effects, so it accounts for unequally spaced and missing time points. It suggests this model:</p>
+<ul>
+<li>Let <span class="math inline">\(\gamma_i\)</span> be a <span class="math inline">\(n(0, \sigma_\gamma\)</span>) random effect for the <span class="math inline">\(i\)</span>th subject.</li>
+<li>Let <span class="math inline">\(\epsilon_1, ... \epsilon_T\)</span> be the within-subject white noise that is <span class="math inline">\(n(0, \sigma_w)\)</span>, where <span class="math inline">\(T\)</span> is the maximum follow-up time (we may only use the first few of these for a given subject)</li>
+<li>Then the random effect for subject <span class="math inline">\(i\)</span> at time <span class="math inline">\(t\)</span> is <span class="math inline">\(r_{i,t} = \rho^{t}\gamma_i + \rho^{t-1}\epsilon_1 + \rho^{t-2}\epsilon_2 + ... \epsilon_k\)</span></li>
+<li>Or since the white noise <span class="math inline">\(\epsilon\)</span> are generated while Stan is running, they will all be defined regardless of which observations are actually observed, so the standard specification should work: <span class="math inline">\(r_{i,1} = \gamma_i, r_{i,2} = \rho r_{i,1} + \epsilon_2, r_{i,3} = \rho r_{i, 2} + \epsilon_3, ...\)</span>.</li>
+</ul>
+<p>Would this specification lead to sampling problems? Do <span class="math inline">\(\sigma_\gamma\)</span> and <span class="math inline">\(\sigma_w\)</span> compete too much?</p>
 </body>
 </html>
