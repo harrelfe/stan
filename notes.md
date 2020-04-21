@@ -19,6 +19,9 @@ pagetitle: Stan Notes
    + apply logit link to cum_probs to estimate intercepts
    + est_intercepts <- qlogis(cum_probs)
 
+# QR Decomposition for Orthonormmalization
+* From Ben Goodrich: The last $\beta$ parameter is unchanged so its $\beta$ equals its $\theta$ parameter in the Stan program. This will sometimes create a warning message (e.g. when using `pairs()` that "beta[...] is duplicative").
+
 # General Information About Random Effects
 * From Jonathan Schildcrout: Omitting random effects from a model
    + This is not bias.  The two models are estimating different parameters.  For Binary data there are approximations that can be used to convert between the marginal (what LRM estimates) and conditional (what random effects estimate) parameters.  See Zeger Liang and Albert 1988.  Not sure if that works for general ordinal data. 
@@ -30,6 +33,13 @@ pagetitle: Stan Notes
    + You can think of the sd of the random effects as a coefficient for a standardized covariate that was not observed: $Logit(p_{ij}) = x_{ij} \beta + b_i$, and $b_i ~ N(0, \sigma^2)$ which means $Logit(p_{ij}) = x_{ij} \beta + \sigma * Z_i$ , and $Z_i ~ N(0, 1)$
 * Ben Goodrich: Why not use a prior that is n(0, $\sigma_{\gamma}$)
    + The main thing is that usually (but unfortunately not always) the MCMC goes better if you utilize the stochastic representation of the normal distribution, which entails putting the unscaled random effects in the parameters block and scaling them by sigmag in the transformed parameters block to get the scaled random effects that go into the likelihood function. Then, the unscaled random effects get a standard normal prior, which implies before you see the data that the scaled random effects are distributed normal with mean zero and standard deviation sigmag. That tends to reduce the posterior dependence between sigmag and the (unscaled) random effects. In addition, there should be a proper prior on sigmag. I put it as exponential, but you would need to pass in the prior rate from R.
+
+## AR(1) Random Effects
+Ben Goodrich re warnings about Pareto k diagnostics from `loo()`: The `loo()` function is trying to estimate what would happen if 1 patient were dropped from the analysis and predicted conditional on all the other patients. But its importance sampling has infinite variance when the Pareto k for the left-out observation is greater than 1 and has too high variance if the Pareto k is greater than 0.7. The Pareto k pertains to how much the posterior distribution would change if one observation were left out. In these models, if one person were left out the corresponding gamma and that patient's column of eps_raw would revert to their prior distributions because there would no longer be any information in the data to update them with. Thus, this posterior distribution is too sensitive to the particular patients being conditioned on to estimate the expected log predictive density of future patients well.
+
+To overcome this problem, we can do K-fold with K equal to the number of patients or redo the loo calculation to use a likelihood function that integrates the random effects out like in a Frequentist estimator, as described in that Psychometrica article I sent you the link to. But we can still use Stan to first obtain the posterior draws conditional on the random effects.
+
+
 
 # MLEs and Optimization for Random Effects Models
 * From Ben Goodrich: Inconsistent results when using `rstan::optimizing`

@@ -36,6 +36,10 @@
 <li>est_intercepts &lt;- qlogis(cum_probs)</li>
 </ul></li>
 </ul>
+<h1 id="qr-decomposition-for-orthonormmalization">QR Decomposition for Orthonormmalization</h1>
+<ul>
+<li>From Ben Goodrich: The last <span class="math inline">\(\beta\)</span> parameter is unchanged so its <span class="math inline">\(\beta\)</span> equals its <span class="math inline">\(\theta\)</span> parameter in the Stan program. This will sometimes create a warning message (e.g. when using <code>pairs()</code> that “beta[…] is duplicative”).</li>
+</ul>
 <h1 id="general-information-about-random-effects">General Information About Random Effects</h1>
 <ul>
 <li>From Jonathan Schildcrout: Omitting random effects from a model
@@ -53,6 +57,9 @@
 <li>The main thing is that usually (but unfortunately not always) the MCMC goes better if you utilize the stochastic representation of the normal distribution, which entails putting the unscaled random effects in the parameters block and scaling them by sigmag in the transformed parameters block to get the scaled random effects that go into the likelihood function. Then, the unscaled random effects get a standard normal prior, which implies before you see the data that the scaled random effects are distributed normal with mean zero and standard deviation sigmag. That tends to reduce the posterior dependence between sigmag and the (unscaled) random effects. In addition, there should be a proper prior on sigmag. I put it as exponential, but you would need to pass in the prior rate from R.</li>
 </ul></li>
 </ul>
+<h2 id="ar1-random-effects">AR(1) Random Effects</h2>
+<p>Ben Goodrich re warnings about Pareto k diagnostics from <code>loo()</code>: The <code>loo()</code> function is trying to estimate what would happen if 1 patient were dropped from the analysis and predicted conditional on all the other patients. But its importance sampling has infinite variance when the Pareto k for the left-out observation is greater than 1 and has too high variance if the Pareto k is greater than 0.7. The Pareto k pertains to how much the posterior distribution would change if one observation were left out. In these models, if one person were left out the corresponding gamma and that patient’s column of eps_raw would revert to their prior distributions because there would no longer be any information in the data to update them with. Thus, this posterior distribution is too sensitive to the particular patients being conditioned on to estimate the expected log predictive density of future patients well.</p>
+<p>To overcome this problem, we can do K-fold with K equal to the number of patients or redo the loo calculation to use a likelihood function that integrates the random effects out like in a Frequentist estimator, as described in that Psychometrica article I sent you the link to. But we can still use Stan to first obtain the posterior draws conditional on the random effects.</p>
 <h1 id="mles-and-optimization-for-random-effects-models">MLEs and Optimization for Random Effects Models</h1>
 <ul>
 <li>From Ben Goodrich: Inconsistent results when using <code>rstan::optimizing</code>
