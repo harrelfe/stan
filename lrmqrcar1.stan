@@ -78,11 +78,11 @@ parameters {
   real<lower = 0> sigmag;   // SD of random effects
 	real<lower = 0, upper = 1> rho;   // AR(1) correlation, presumed positive
 	vector[Nt - 1] eps_raw[Nc];       // unscaled within-subject noise
-	real<lower = 0> sigmaw;           // SD of within-subject noise
 }
 
 transformed parameters {
   vector[k - 1] alpha;                               // intercepts
+	real sigmaw = sigmag * sqrt(1 - square(rho));      // SD of within-subject noise
   vector[Nc] log_lik;                                // log-likelihood pieces
   for (j in 2:k) alpha[j - 1] = logit(sum(pi[j:k])); // predictors are CENTERED
   for (n in 1:Nc) {
@@ -98,7 +98,6 @@ model {
   sigmag ~ exponential(rate);
   // implicit: rho ~ uniform(0, 1)
 	for (n in 1:Nc) eps_raw[n] ~ std_normal(); // implies: eps[n] ~ normal(0, sigmaw)
-	sigmaw ~ exponential(ratew);
   target += log_lik;
 }
 
