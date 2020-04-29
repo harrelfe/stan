@@ -18,8 +18,19 @@ pagetitle: Stan Notes
    + cum_probs <- cumsum(est_probs)
    + apply logit link to cum_probs to estimate intercepts
    + est_intercepts <- qlogis(cum_probs)
+* FH question:  Since in the limit with no ties at all the first intercept when betas are all zero or covariates are all at their mean perhaps, is first intercept is logit((n-1)/n) and the last is login(1/n), would U(logit(n-1)/n), logit(1/n)) be appropriate?  This is for the model form P(Y >= y).  One complication in that way of thinking is if there are clustered observations the probability would perhaps not use n but would use the number of clusters (?).
+* I previously attempted to use some uniform priors for the intercepts without much success.  I think there are a few problems with using U(logit((n-1)/n), logit(1/n)). First these are not necessarily bounds for the posterior *distributions* of the first and last intercept; these are values of the MLEs. Also, if you use an independent U(logit((n-1)/n), logit(1/n)) prior for each intercept, there is nothing in the form of the prior to enforce the ordering constraint. We can put an order constraint on using Stan but this is pretty inefficient (this is the same reason why using brms for ordinal regression is inefficient with many categories).  Both of these lead to sampling issues since we have so little data to inform the location of the intercepts in the continuous case.   Last, if we're truly in a continuous data setting, we don't know the value of n before collecting the data, so we wouldn't be able define the limits of the uniform distribution. To me, using the observed data to define the prior (even in this somewhat limited way) is a red flag that we're "double-dipping". We should be able to define the prior without seeing any data. That's what I'm trying to do with the Dirichlet process prior.
+* Ben Goodrich reply: Dirichlet process makes sense conceptually, although you can't do it literally in Stan because it concentrates on a finite set. Some people have had some success with a giant but finite number of components in a Dirichlet. Also, this reminds me of some stuff that other people were doing to use a spline or similar function for the baseline hazard in survival models, which also has to be strictly increasing.
+* Nathan: Ben - I agree with you about implementing a 'true' Dirichlet process in Stan; I think it will be difficult using HMC even with a finite Dirichlet process so I may have to venture outside the Stan-verse. As you mentioned there are close ties to other semi-parametric models such as those used in survival analysis.  Frank - Can you elaborate more on the conditioning on sample size? In many models we assume n is fixed rather than a parameter, but the value of n doesn't play any part in defining the form or number of parameters. Shouldn't we be able to make draws from the prior distribution without knowing the sample size? It seems that assuming knowledge about the number of outcome categories for a traditional ordinal regression is qualitatively different than assuming we know the number of distinct continuous outcome values, but I'm not sure I can explain why.
+* Frank: The comment about a prior needing to have a kind of universal meaning is very interesting.  The prior should capture the pre-data state of knowledge, and if we have knowledge that uses n (which we're already conditioning on) but does not use the data in any other way, perhaps this is OK.
 
-# QR Decomposition for Orthonormmalization
+## Existing `Stan` Approaches
+
+* See [this](ttps://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html)
+* Nathan: The model they show is the Stan manual uses improper priors for the cutpoints with only the 'ordered' constraint in the parameter block to make sure they are increasing. The order constraint itself converts to an unconstrained space using a log difference transformation, i.e. delta_1 = alpha_1, delta_2 = log(alpha_2 - alpha_1), delta_3 = log(alpha_3 - alpha_2). If the prior on the constrained space is improper, then the unconstrained prior will also be improper so a proper posterior distribution is not guaranteed.  Usually, if there is a reasonable amount of observed data for each category then you can get convergence, but if the amount of data for each category is low (e.g. continuous CPM case or traditional ordinal model with low or zero counts in one or more categories) there can be problems getting the model to converge.
+* Michael Betancourt has a good blog post that goes into more detail and also describes the alternative Dirichlet prior [here](https://betanalpha.github.io/assets/case_studies/ordinal_regression.html)
+
+# QR Decomposition for Orthonormalization
 * From Ben Goodrich: The last $\beta$ parameter is unchanged so its $\beta$ equals its $\theta$ parameter in the Stan program. This will sometimes create a warning message (e.g. when using `pairs()` that "beta[...] is duplicative").
 
 # General Information About Random Effects
@@ -69,4 +80,53 @@ To overcome this problem, we can do K-fold with K equal to the number of patient
 
 FH question on homescedasticity of random effects:  With random effect for subject $i$ at the first time $t=1$ having variance $\sigma^2_\gamma$, we can use the recursive relationship $V(X_t) = \rho^2 V(X_{t-1}) + \sigma^2_\epsilon$ to get variances at other times, where $\sigma^2_\epsilon$ is the within-subject white noise variance.  The variance of the random effect at time $t=2$ is $\rho^2 \sigma^2_\gamma + \sigma^2_\epsilon$ and equating the two successive variances results in $\sigma_\epsilon = \sigma_\gamma \sqrt{1 - \rho^2}$.  The same equation results from equating the variance at $t=3$ to the variance at $t=2$.   So it is reasonable to not make $\sigma_\epsilon$ a free parameter but instead to derive it from $\sigma_\gamma$ and $\rho$?  Would this make posterior sampling behave much better too?
 
+<a name="ppo"></a>
 
+# Partial Proportional Odds Model
+
+The [PPO model](http://hbiostat.org/papers/feh/pet90par.pdf) of Peterson and Harrell (1990) in its *unconstrained* form (Eq. (5) of the reference) has this specification for a single observation when $Y=1, 2, ..., k$ when $j > 1$ (the paper uses a different coding, for $Y=0, ..., k$ so their $k$ is our $k-1$)):
+
+$$P(Y \geq j | X) = \text{expit}(\alpha_{j-1} + X\beta + [j > 2] Z\tau_{j-2}) = \text{expit}(c_{j})$$
+
+* $c_{1}$: undefined and unused
+* $\alpha$: $k-1$ vector of overall intercepts
+* $\tau$:  $k-2 \times q$ matrix of parameters
+
+For the entire dataset $Z$ is an $n\times q$ design matrix specifying the form of departures from proportional odds, and to honor the hierarchy principle for interactions must be a subset of the columns of $X_{n, p}$.  With regard to $Z$ the model is multinomial instead of ordinal, and so unlike the PO model there are issues with cell sizes in the $Y$ frequency distribution.  The unconstrained PPO model is strictly for discrete ordinal $Y$ and there must be at least $k=3$ levels of $Y$.  The $\alpha$s are the intercepts for $Y \geq 2$ (and thus their negatives are intercepts for $Y=1$).
+
+Likelihood components are as follows:
+
+* $Y=1$: $\text{expit}(- c_2)$ ($Z$ ignored)
+* $Y=2, ..., k-1$: $\text{expit}(c_Y) - \text{expit}(c_{Y+1})$ ($Z$ ignored in first term when $Y=2$)
+* $Y=k$: $\text{expit}(c_k)$ ($Z$ used)
+
+In `Stan` code `prmqrcppo.stan`, $Z$ is orthonormalized by the QR decomposition, and the PPO parameters on this new scale are $\omega$ instead of $\tau$ just as $\theta$ is substituted for $\beta$.  This code implements cluster (random) effects, so if there are no repeated observations per subject the user needs to specify a very small mean for the exponential prior for the variance of random effects (e.g., 0.001).
+
+The $p$-vector of normal prior standard deviations for $\theta$ is `sds` and a separate $k-2 \times q$ matrix of normal prior SDs for $\omega$ is given by `sdsppo`.  If a binary treatment variable is present and one wants full control over its prior SD, be sure to put treatment as the last parameter for $X$, and if treatment is allowed to violate the PO assumption also put treatment as the last parameter for $Z$.
+
+To some extent the constrained PPO model may be obtained by using very skeptical priors on the $\omega$ (transformed $\tau$) parameters, e.g., standard deviations < 1.0.  This will lower the effective number of model parameters.
+
+# Pertinent Stan Documentation
+
+* [Basics](https://mc-stan.org/docs/2_23/stan-users-guide/basic-motivation.html)
+* [Multi-indexes](https://mc-stan.org/docs/2_23/stan-users-guide/multi-indexing-chapter.html)
+* [Mixed operations](https://mc-stan.org/docs/2_23/functions-reference/mixed-operations.html)
+* [log Sums](https://mc-stan.org/docs/2_23/stan-users-guide/log-sum-of-exponentials.html)
+* [Reparameterization](https://mc-stan.org/docs/2_23/stan-users-guide/QR-reparameterization-section.html)
+* [Ordered logisitic](https://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html)
+
+## Especially Relevant Functions
+
+| Function        | Computes |
+|-----------------|----------|
+| log1m_exp       | log(1 - exp(x)) |
+| log1p_exp       | log(1 + exp(x)) |
+| log_diff_exp    | log(exp(x) - exp(y)) |
+|  -log1p_exp(-x) | log(expit(x)) |
+
+
+Also study `bernoulli_logit` and `categorical_logit`.
+
+# Other Useful Links
+* [Logistic model with random intercept and small cluster sizes](https://discourse.mc-stan.org/t/bias-in-main-effects-for-logistic-model-with-random-intercept-and-small-cluster-sizes)
+* [Implicit parameters as with marginal structural models](https://discourse.mc-stan.org/t/algebra-solver-has-a-side-effect-on-log-probability)
