@@ -67,6 +67,8 @@ data {
   vector<lower = 0>[p] sds;
 	vector<lower = 0>[q] sdsppo;
   real<lower = 0> rate;
+
+  real<lower = 0> conc;
 }
 
 transformed data {
@@ -120,9 +122,9 @@ model {
   gamma_raw ~ std_normal(); // implies: gamma ~ normal(0, sigmag)
   sigmag ~ exponential(rate); 
   target += log_lik;
+  target += dirichlet_lpdf(pi | rep_vector(conc, k));
   target += normal_lpdf(theta | 0, sds);
 	for (j in 1:(k - 2)) target += normal_lpdf(omega[ , j] | 0, sdsppo);
-  // implicit: pi ~ dirichlet(ones)
 }
 
 generated quantities {

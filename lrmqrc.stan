@@ -47,6 +47,8 @@ data {
   // prior standard deviations
   vector<lower = 0>[p] sds;
   real<lower = 0> rate;
+
+  real<lower = 0> conc;
 }
 
 transformed data {
@@ -84,8 +86,8 @@ model {
   gamma_raw ~ std_normal(); // implies: gamma ~ normal(0, sigmag)
   sigmag ~ exponential(rate); 
   target += log_lik;
+  target += dirichlet_lpdf(pi | rep_vector(conc, k));
   target += normal_lpdf(theta | 0, sds);
-  // implicit: pi ~ dirichlet(ones)
 }
 
 generated quantities {

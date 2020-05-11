@@ -42,6 +42,8 @@ data {
   
   // prior standard deviations
   vector<lower = 0>[p] sds;
+
+  real<lower = 0> conc;
 }
 
 transformed data {
@@ -74,8 +76,9 @@ transformed parameters {
 model {
   target += log_lik;
   target += normal_lpdf(theta | 0, sds);
-  // implicit: pi ~ dirichlet(ones)
+  target += dirichlet_lpdf(pi | rep_vector(conc, k));
 }
+
 generated quantities {
   vector[p] beta = R_ast_inverse * theta;            // coefficients on X
   vector[p] OR = exp(beta);
