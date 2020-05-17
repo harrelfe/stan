@@ -31,7 +31,49 @@ pagetitle: Stan Notes
 * Michael Betancourt has a good blog post that goes into more detail and also describes the alternative Dirichlet prior [here](https://betanalpha.github.io/assets/case_studies/ordinal_regression.html)
 
 # QR Decomposition for Orthonormalization
-* From Ben Goodrich: The last $\beta$ parameter is unchanged so its $\beta$ equals its $\theta$ parameter in the Stan program. This will sometimes create a warning message (e.g. when using `pairs()` that "beta[...] is duplicative").
+
+From Ben Goodrich
+
+The last $\beta$ parameter is unchanged so its $\beta$ equals its $\theta$ parameter in the Stan program. This will sometimes create a warning message (e.g. when using `pairs()` that "beta[...] is duplicative").
+
+However, compiling an entire Stan program just to obtain a rescaled QR decomposition is overkill because the same can be accomplished with just R code. So, if you replace your stanQr() function with this function that does what your qr.stan program does:
+
+```
+stanQr <- function(X, center = TRUE) {
+  p <- ncol(X)
+  N <- nrow(X)
+  if (center) X <- scale(X, center = TRUE, scale = FALSE)
+  QR <- qr(X)
+  Q <- qr.Q(QR)
+  R <- qr.R(QR)
+  sgns <- sign(diag(R))
+  Q_ast <- sweep(Q, MARGIN = 2, STATS = sgns, FUN = `*`)
+  R_ast <- sweep(R, MARGIN = 1, STATS = sgns, FUN = `*`)
+  corner <- R_ast[p, p]
+  R_ast_inverse <- backsolve(R_ast, diag(p))
+  Q_ast <- Q_ast * corner
+  R_ast <- R_ast / corner
+  R_ast_inverse <- R_ast_inverse * corner
+  return(list(Xqr = Q_ast, R = R_ast, R_inv = R_ast_inverse))
+}
+```
+
+Then you also get the necessary equivalence. Moreover, the bottom right element of w$R and w$R_inv is 1.0 so the last coefficient is the same even though the design matrices are different.
+
+All of the columns of X are different from all of the columns of Q_ast (which is what you are calling Xqr). They have to be; otherwise they wouldn't be orthogonal. But the sequence of equalities still holds
+
+eta = X * beta = (Q * R) * beta = (Q * corner * 1 / corner * R) * beta = (Q_ast * R_ast) * beta = Q_ast * (R_ast * beta) = Q_ast * theta
+
+where theta = R_ast * beta. So, if you do the model in terms of Q_ast and get (the posterior distribution of) the K-vector theta. When you pre-multiply theta by the upper-triangular matrix R_ast^{-1}, since the lower-right corner of both R_ast and R_ast^{-1} is 1.0, beta[K] = 0 * theta[1] + 0 * theta[2] + ... + 0 * theta[K - 1] + 1.0 * theta[K] = theta[K]. In other words, although you changed the design matrix, you left the K-th coefficient as is and changed the preceding K - 1 coefficients.
+
+In the case of a continuous outcome and no link function, the same idea is used to get least-squares estimates
+
+https://en.wikipedia.org/wiki/Numerical_methods_for_linear_least_squares#Orthogonal_decomposition_methods
+
+where theta = Q' * y and then you pre-multiply theta by R^{-1}. We just added the renormalization to make the lower-right element 1.0 so that it is easy to specify a prior on theta[K].
+
+
+
 
 # General Information About Random Effects
 * From Jonathan Schildcrout: Omitting random effects from a model

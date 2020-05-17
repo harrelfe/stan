@@ -46,9 +46,12 @@ data {
   
   // prior standard deviations
   vector<lower = 0>[p] sds;
-  real<lower = 0> rate;
 
-  real<lower = 0> conc;
+  int<lower = 1, upper = 2> psigma;  // 1=t(4, rsdmean, rsdsd); 2=exponential
+  real<lower = 0> rsdmean;  // mean of prior for sigma
+  real<lower = 0> rsdsd;    // scale parameter for sigma (used only if psigma=1)
+
+  real<lower = 0> conc;     // for PO and PPO models
 }
 
 transformed data {
@@ -84,7 +87,8 @@ transformed parameters {
 
 model {
   gamma_raw ~ std_normal(); // implies: gamma ~ normal(0, sigmag)
-  sigmag ~ exponential(rate); 
+  if(psigma == 1) sigmag ~ student_t(4, rsdmean, rsdsd);
+  else sigmag ~ exponential(1. / rsdmean); 
   target += log_lik;
   target += dirichlet_lpdf(pi | rep_vector(conc, k));
   target += normal_lpdf(theta | 0, sds);
