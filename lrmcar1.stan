@@ -44,35 +44,26 @@ functions { // can check these match rms::orm via rstan::expose_stan_functions
 data {
   int<lower = 1> Nc;    // number of patients
   int<lower = 1> p;     // number of predictors
-  matrix[Nc, p]  X;     // matrix of CENTERED baseline predictors WITH TREATMENT LAST
+  matrix[Nc, p]  X;     // matrix of CENTERED baseline predictors
   int<lower = 2> k;     // number of outcome categories (7)
 	int<lower = 2> Nt;    // number of time points (= maximum integer time)
   int<lower = 0, upper = k> y[Nc, Nt]; // outcome on 1 ... k with NA -> 0
 
   // prior standard deviations
   vector<lower = 0>[p] sds;
-  real<lower = 0> rate;
-	real<lower = 0> ratew;    // for within-subject white noise sigmaw
+
+  int<lower = 1, upper = 2> psigma;  // 1=t(4, rsdmean, rsdsd); 2=exponential
+  real<lower = 0> rsdmean;  // mean of prior for sigma
+  real<lower = 0> rsdsd;    // scale parameter for sigma (used only if psigma=1)
 }
 
 transformed data {
-  matrix[Nc, p] Q_ast = qr_thin_Q(X);
-  matrix[p, p]  R_ast = qr_thin_R(X);
-  real corner = R_ast[p, p];
-  matrix[p, p] R_ast_inverse = inverse(R_ast);
-  row_vector[p] Q_list[Nc];
-
-  // renormalize so that R_ast[p, p] = 1
-  // THIS IMPLIES THE TREATMENT EFFECT IS UNAFFECTED BY THE ROTATION
-  Q_ast *= corner;
-  R_ast /= corner;
-  R_ast_inverse *= corner;
-  
-  for (n in 1:Nc) Q_list[n] = Q_ast[n, ];
+  row_vector[p] Xr[Nc];
+  for (n in 1:Nc) Xr[n] = X[n, ];
 }
 
 parameters {
-  vector[p] theta; // coefficients on Q_ast
+  vector[p] beta; // coefficients on X
   simplex[k] pi;  // category probabilities for a person w/ average predictors
   vector[Nc] gamma_raw;  // unscaled random effects
   real<lower = 0> sigmag;   // SD of random effects
@@ -86,22 +77,18 @@ transformed parameters {
   vector[Nc] log_lik;                                // log-likelihood pieces
   for (j in 2:k) alpha[j - 1] = logit(sum(pi[j:k])); // predictors are CENTERED
   for (n in 1:Nc) {
-    log_lik[n] = p_log_lik(alpha, theta, sigmag * gamma_raw[n], 
-                           rho, sigmaw * eps_raw[n], Q_list[n], y[n], k);
+    log_lik[n] = p_log_lik(alpha, beta, sigmag * gamma_raw[n], 
+                           rho, sigmaw * eps_raw[n], Xr[n], y[n], k);
   }
 }
 
 model {
-  target += normal_lpdf(theta | 0, sds);
+  target += normal_lpdf(beta | 0, sds);
   // implicit: pi ~ dirichlet(ones)
   gamma_raw ~ std_normal(); // implies: gamma ~ normal(0, sigmag)
-  sigmag ~ exponential(rate);
+  if(psigma == 1) sigmag ~ student_t(4, rsdmean, rsdsd);
+  else sigmag ~ exponential(1. / rsdmean); 
   // implicit: rho ~ uniform(0, 1)
 	for (n in 1:Nc) eps_raw[n] ~ std_normal(); // implies: eps[n] ~ normal(0, sigmaw)
   target += log_lik;
-}
-
-generated quantities {
-  vector[p] beta = R_ast_inverse * theta;            // coefficients on X
-  vector[p] OR = exp(beta);
 }

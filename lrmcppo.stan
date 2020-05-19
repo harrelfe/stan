@@ -1,7 +1,7 @@
-// Based on lrmqrc.stan by Ben Goodrich
+// Based on lrmc.stan by Ben Goodrich
 functions {
   // pointwise log-likelihood contributions
-  vector pw_log_lik(vector alpha, vector beta, matrix omega, vector gamma,
+  vector pw_log_lik(vector alpha, vector beta, matrix tau, vector gamma,
 	                  row_vector[] X, row_vector[] Z, int[] y, int[] cluster) {
     int N = size(X);
     vector[N] out;
@@ -13,8 +13,8 @@ functions {
   		real cj1;
 			if (j == 1)        cj  = -( alpha[1] + eta );
 			else if (j == 2)   cj  = alpha[1] + eta;
-			else               cj  = alpha[j - 1] + eta + Z[n] * omega[ , j - 2];
-			if(j > 1 && j < k) cj1 = alpha[j] + eta + Z[n] * omega[ , j - 1];
+			else               cj  = alpha[j - 1] + eta + Z[n] * tau[ , j - 2];
+			if(j > 1 && j < k) cj1 = alpha[j] + eta + Z[n] * tau[ , j - 1];
 
       if (j == 1 || j == k) out[n] = log_inv_logit(cj);
 			else out[n] = log(1./(1. + exp(-cj)) - 1./(1. + exp(-cj1)));
@@ -26,7 +26,7 @@ functions {
   }
   
   // Pr(y == j)
-  matrix Pr(vector alpha, vector beta, matrix omega, vector gamma,
+  matrix Pr(vector alpha, vector beta, matrix tau, vector gamma,
 	          row_vector[] X, row_vector[] Z, int[] y, int[] cluster) {
     int N = size(X);
     int k = max(y); // assumes all possible categories are observed
@@ -39,8 +39,8 @@ functions {
 		    real cj1;
 			  if (j == 1)        cj  = -( alpha[1] + eta );
 			  else if (j == 2)   cj  = alpha[1] + eta;
-			  else               cj  = alpha[j - 1] + eta + Z[n] * omega[ , j - 2];
-			  if(j > 1 && j < k) cj1 = alpha[j] + eta + Z[n] * omega[ , j - 1];
+			  else               cj  = alpha[j - 1] + eta + Z[n] * tau[ , j - 2];
+			  if(j > 1 && j < k) cj1 = alpha[j] + eta + Z[n] * tau[ , j - 1];
 
 				if (j == 1 || j == k) out[n, j] = log_inv_logit(cj);
 				else out[n, j] = log(1./(1. + exp(-cj)) - 1./(1. + exp(-cj1)));
@@ -57,8 +57,8 @@ data {
   int<lower = 1> Nc;  // number of clusters
   int<lower = 1> p;   // number of predictors
 	int<lower = 1> q;   // number of non-PO predictors in Z
-  matrix[N, p] X;     // matrix of CENTERED predictors WITH TREATMENT LAST
-	matrix[N, q] Z;     // matrix of CENTERED PPO predictors with TREATMENT LAST
+  matrix[N, p] X;     // matrix of CENTERED predictors
+	matrix[N, q] Z;     // matrix of CENTERED PPO predictors
   int<lower = 2> k;   // number of outcome categories
   int<lower = 1, upper = k> y[N]; // outcome on 1 ... k
   int<lower = 1, upper = Nc> cluster[N];  // cluster IDs
@@ -75,38 +75,16 @@ data {
 }
 
 transformed data {
-  matrix[N, p] Q_ast = qr_thin_Q(X);
-  matrix[p, p] R_ast = qr_thin_R(X);
-  real corner = R_ast[p, p];
-  matrix[p, p] R_ast_inverse = inverse(R_ast);
-  row_vector[p] Q_list[N];
-  matrix[N, q] Q_asto = qr_thin_Q(Z);
-  matrix[q, q] R_asto = qr_thin_R(Z);
-  row_vector[q] Q_listo[N];
-  matrix[q, q] R_ast_inverseo = inverse(R_asto);
-
-  // renormalize so that R_ast[p, p] = 1
-  // THIS IMPLIES THE TREATMENT EFFECT IS UNAFFECTED BY THE ROTATION
-  Q_ast *= corner;
-  R_ast /= corner;
-  R_ast_inverse *= corner;
+  row_vector[p] Xr[N];
+  row_vector[q] Zr[N];
   
-  for (n in 1:N) Q_list[n] = Q_ast[n, ];
-
-  corner = R_asto[q, q];
-  // renormalize so that R_asto[q, q] = 1
-  // THIS IMPLIES THE TREATMENT EFFECT IS UNAFFECTED BY THE ROTATION
-  Q_asto *= corner;
-  R_asto /= corner;
-  R_ast_inverseo *= corner;
-  
-  for (n in 1:N) Q_listo[n] = Q_asto[n, ];
+  for (n in 1:N) Xr[n] = X[n, ];
+  for (n in 1:N) Zr[n] = Z[n, ];
 }
 
 parameters {
-  vector[p] theta; // coefficients on Q_ast
-//	vector[q] omega; // coefficients on Q_asto
-  matrix[q, k - 2] omega;  // coefficients on Q_asto
+  vector[p] beta; // coefficients on X
+  matrix[q, k - 2] tau;  // coefficients on Z
   simplex[k] pi;  // category probabilities for a person w/ average predictors
   vector[Nc] gamma_raw;  // unscaled random effects
   real<lower = 0> sigmag;   // SD of random effects
@@ -117,8 +95,7 @@ transformed parameters {
   vector[Nc] gamma = sigmag * gamma_raw;             // scaled random effects
   vector[N] log_lik;                                 // log-likelihood pieces
   for (j in 2:k) alpha[j - 1] = logit(sum(pi[j:k])); // predictors are CENTERED
-  log_lik = pw_log_lik(alpha, theta, omega, gamma,
-                       Q_list, Q_listo, y, cluster);
+  log_lik = pw_log_lik(alpha, beta, tau, gamma, Xr, Zr, y, cluster);
 }
 
 model {
@@ -127,12 +104,6 @@ model {
   else sigmag ~ exponential(1. / rsdmean); 
   target += log_lik;
   target += dirichlet_lpdf(pi | rep_vector(conc, k));
-  target += normal_lpdf(theta | 0, sds);
-	for (j in 1:(k - 2)) target += normal_lpdf(omega[ , j] | 0, sdsppo);
-}
-
-generated quantities {
-  vector[p] beta = R_ast_inverse  * theta;        // coefficients on X
-	matrix[q, k - 2] tau  = R_ast_inverseo * omega; // coefficients on Z
-  vector[p] OR = exp(beta);
+  target += normal_lpdf(beta | 0, sds);
+	for (j in 1:(k - 2)) target += normal_lpdf(tau[ , j] | 0, sdsppo);
 }

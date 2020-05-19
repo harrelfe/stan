@@ -1,9 +1,9 @@
-## Tests for lrmqrcppo.stan partial proportional odds model
+## Tests for lrmcppo.stan partial proportional odds model
 
 require(rms)
 require(rstan)
-mod <- readRDS('~/R/stan/lrmqrppo.rds')
-# mod <- stan_model('lrmqrcppo.stan')
+mod <- readRDS('~/R/stan/lrmppo.rds')
+# mod <- stan_model('lrmcppo.stan')
 
 ## Test 1: PO model (partial PPO terms heavily penalized)
 
