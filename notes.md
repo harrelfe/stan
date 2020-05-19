@@ -72,6 +72,25 @@ https://en.wikipedia.org/wiki/Numerical_methods_for_linear_least_squares#Orthogo
 
 where theta = Q' * y and then you pre-multiply theta by R^{-1}. We just added the renormalization to make the lower-right element 1.0 so that it is easy to specify a prior on theta[K].
 
+Q: Does this guarantee that the prior for the last beta does really get applied to the treatment effect and only the treatment effect?
+
+A: Yes, if the priors on the elements of theta are independent, which is the way we have written it in the .stan programs and would seem to be the only sensible choice since the columns of Q_ast are orthogonal to each other.
+
+Q: If I were to split the design matrices into two matrices (and for this case the 2nd matrix has one column), apply QR to the first and not the second, and combine into one log likelihood evaluation, would I get exactly the same results as the "corner QR" method?
+
+Generally, no. In the example you gave earlier, if you split the third column of X out, then it remains highly correlated with the first two:
+
+```
+w <- stanQr(X[,1:2])
+zapsmall(cor(cbind(w$Xqr, scale(X[,3], center = TRUE, scale = FALSE))))
+          [,1]      [,2]      [,3]
+[1,] 1.0000000 0.0000000 0.5685352
+[2,] 0.0000000 1.0000000 0.5932746
+[3,] 0.5685352 0.5932746 1.0000000
+```
+
+In the case where the last variable is randomized, then the correlation would be close to zero, but it isn't exactly the same as orthogonalizing.
+
 
 
 
