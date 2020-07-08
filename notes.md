@@ -23,6 +23,9 @@ pagetitle: Stan Notes
 * Ben Goodrich reply: Dirichlet process makes sense conceptually, although you can't do it literally in Stan because it concentrates on a finite set. Some people have had some success with a giant but finite number of components in a Dirichlet. Also, this reminds me of some stuff that other people were doing to use a spline or similar function for the baseline hazard in survival models, which also has to be strictly increasing.
 * Nathan: Ben - I agree with you about implementing a 'true' Dirichlet process in Stan; I think it will be difficult using HMC even with a finite Dirichlet process so I may have to venture outside the Stan-verse. As you mentioned there are close ties to other semi-parametric models such as those used in survival analysis.  Frank - Can you elaborate more on the conditioning on sample size? In many models we assume n is fixed rather than a parameter, but the value of n doesn't play any part in defining the form or number of parameters. Shouldn't we be able to make draws from the prior distribution without knowing the sample size? It seems that assuming knowledge about the number of outcome categories for a traditional ordinal regression is qualitatively different than assuming we know the number of distinct continuous outcome values, but I'm not sure I can explain why.
 * Frank: The comment about a prior needing to have a kind of universal meaning is very interesting.  The prior should capture the pre-data state of knowledge, and if we have knowledge that uses n (which we're already conditioning on) but does not use the data in any other way, perhaps this is OK.
+* Nathan: In the binomial case with parameter theta, there are multiple ways of defining a noninformative prior, e.g. beta(1,1) is a noninformative prior for theta, the improper beta(0,0) is a noninformative prior for logit(theta) and beta(1/2, 1/2) is the transformation invariant Jeffreys' noninformative prior. As Gelman et al. mention in their Bayes' book, there is no clear choice for a vague prior because a density that is 'flat' for one parameterization is not for another.  There is an analogous relationship between binomial data with a beta prior and multinomial data with a Dirichlet prior.  In our case using a concentration parameter of 1 gives equal density to all vectors of category probabilities (when all covars are 0), using a concentration parameter of 0 gives an improper prior that is uniform for the log category probabilities and results in a proper posterior if there is at least 1 observation per category.  To match the intercept/cutpoint MLEs, I think we need the concentration parameter that gives a uniform prior for the link function applied to the cumulative category probabilities, i.e. logit(sum(cat. prob)) or probit(sum(cat. prob)). My guess is that the 1/n heuristic and your empirical formula are getting somewhat close to this, but I will spend some time to work through the math.  It seems like this may be a situation where because the posterior inference is sensitive to prior choice there is no a perfect solution. We can offer some recommendations for what seems to work.
+
+Ben Goodrich put a function `Pr` inside the Stan code.  This is used just for checking that probabilities add up to one.  You can use `rstan::expose_stan_functions('foo.stan')` to access those functions from R.
 
 ## Existing `Stan` Approaches
 
@@ -167,6 +170,43 @@ The $p$-vector of normal prior standard deviations for $\theta$ is `sds` and a s
 
 To some extent the constrained PPO model may be obtained by using very skeptical priors on the $\omega$ (transformed $\tau$) parameters, e.g., standard deviations < 1.0.  This will lower the effective number of model parameters.
 
+## Constrained Partial Proportional Odds Model
+
+This is Eq. (6) of Peterson & Harrell (1990) and is akin to including interactions between covariates and $\log(t)$ in a Cox proportional hazards model.  As discussed in [Tutz and Berger](https://arxiv.org/abs/2006.03914) this is like having separate regression models for the mean and the variance.
+
+Let $f(y)$ denote a continuous or discontinuous function of the response variable value $y$.  If $Y$ is continuous this will usually be a continuous function, and if $Y$ is discrete it may be linear in the integer category numbers or may be an indicator variable to allow one category of $Y$ to not operate in proportional odds for specific covariates $Z$.  If $Y=1, 2, \ldots, k$, the model is $P(Y \geq y) = \text{expit}(\alpha_{y-1} + X\beta + f(y)Z\tau)$    One can see a great reduction in the number of non-PO parameters $\tau$ to estimate as $\tau$ is now a $q$-vector instead of a $(k-2) \times q$ matrix.
+
+The likelihood components for $Y=j^{th}$ ordered distinct value of $Y$ are as follows:
+
+* $y=1$: $\text{expit}(-[\alpha_1 + X\beta + f(y_2)Z\tau])$
+* $y=2, \ldots, k-1$: $\text{expit}(\alpha_{j-1} + X\beta + f(y_j)Z\tau) - \text{expit}(\alpha_j + X\beta + f(y_{j+1})Z\tau)$ 
+* $y=k$: $\text{expit}(\alpha_{k-1} + X\beta + f(y_k)Z\tau)$
+
+In the `blrm` function the `f` function is the parameter `cppo`, and to help along the MCMC poseterior sampling this function is automatically normalized to have mean 0 and SD 1 over the dataset (or user-provided `center` and `scale` parameters can be used).  In order to do this the user must define `f` so that the last line of the function (the returned value) is e.g. `(value - center) / scale`.  If `center` and `scale` are not arguments to `f`, these arguments will be added automically and computed from the observed mean and SD (but the last line that does the scaling must appear).
+
+
+# Censored Data
+Assume that all possible categories of Y are completely observed in at least one observation.  This implies that if $Y=1,\ldots,k$ left censoring at $a$ is interval censored at $[1, a]$ and right censoring at $b$ is interval censored at $[b, k]$.  Consider an observation with Y interval censored in $[a,b]$.  Then
+
+* if $a=1$ and $b=k$ the observation is ignored
+* if $a=b$ the observation is completely observed and the regular likelihood components above are used
+* if $b=k$ (obs is right censored at $a$), the likelihood is $P(Y \geq a) = \text{expit}(alpha_{a-1} + X\beta)$
+* if $a=1$ (obs is left censored at $b$), the likelihood is $P(Y \leq b) = 1 - P(Y > b) = \text{expit}(-(\alpha_{b} + X\beta))$
+* if $b > a$ when $a > 1$ and $b < k$, the likelihood is $P(Y \in [a,b]) = P(Y \leq b) - P(Y < a) = 1 - P(Y > b) - (1 - P(Y \geq a)) = P(Y \geq a) - P(Y > b) = \text{expit}(\alpha_{a-1} + X\beta) - \text{expit}(\alpha_{b} + X\beta)$ 
+
+## Censored Data in Constrained Partial PO Model
+
+Likelihood components are as follows:
+
+* if $a=1$ and $b=k$ the observation is ignored
+* if $a=b$ the observation is completely observed and the regular likelihood components are used
+* if $b=k$ (obs is right censored at $a$), the likelihood is $P(Y \geq a) = \text{expit}(\alpha_{a-1} + X\beta + f(a)Z\tau)$
+* if $a=1$ (obs is left censored at $b$), the likelihood is $P(Y \leq b) = 1 - P(Y > b) = \text{expit}(-(\alpha_{b} + X\beta + f(b+)Z\tau))$
+* if $b > a$ when $a > 1$ and $b < k$, the likelihood is $P(Y \in [a,b]) = P(Y \leq b) - P(Y < a) = 1 - P(Y > b) - (1 - P(Y \geq a)) = P(Y \geq a) - P(Y > b) = \text{expit}(\alpha_{a-1} + X\beta + f(a)Z\tau) - \text{expit}(\alpha_{b} + X\beta + f(b+)Z\tau)$
+
+Since $Y$ is coded internally as $1, \ldots, k$, $f(b+) = f(b+1)$.
+
+
 # Pertinent Stan Documentation
 
 * [Basics](https://mc-stan.org/docs/2_23/stan-users-guide/basic-motivation.html)
@@ -175,6 +215,7 @@ To some extent the constrained PPO model may be obtained by using very skeptical
 * [log Sums](https://mc-stan.org/docs/2_23/stan-users-guide/log-sum-of-exponentials.html)
 * [Reparameterization](https://mc-stan.org/docs/2_23/stan-users-guide/QR-reparameterization-section.html)
 * [Ordered logisitic](https://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html)
+* [Conditional parameters](https://github.com/stan-dev/stan/issues/2377)
 
 ## Especially Relevant Functions
 
@@ -187,6 +228,15 @@ To some extent the constrained PPO model may be obtained by using very skeptical
 
 
 Also study `bernoulli_logit` and `categorical_logit`.
+
+To look up Stan function near-equivalents to R functions use `rstan::lookup('ncol')` for example.
+
+Some answers to my coding questions appear [here](https://discourse.mc-stan.org/t/how-to-declare-and-use-integer-matrices), e.g.:
+
+* declaring an argument as an integer matrix: `int[,] y`
+* can't use `max()` on a matrix; can temporarily (with some overhead) convert using `max(to_array_1d(y))`.
+* nummber of columns in a row vector: `int p = cols(X[1])`
+* number of rows in a row vector: `size(X)`
 
 # Other Useful Links
 * [Logistic model with random intercept and small cluster sizes](https://discourse.mc-stan.org/t/bias-in-main-effects-for-logistic-model-with-random-intercept-and-small-cluster-sizes)
