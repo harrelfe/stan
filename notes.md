@@ -216,6 +216,7 @@ Since $Y$ is coded internally as $1, \ldots, k$, $f(b+) = f(b+1)$.
 * [Reparameterization](https://mc-stan.org/docs/2_23/stan-users-guide/QR-reparameterization-section.html)
 * [Ordered logisitic](https://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html)
 * [Conditional parameters](https://github.com/stan-dev/stan/issues/2377)
+* [R package development with Stan](https://mc-stan.org/rstantools/articles)
 
 ## Especially Relevant Functions
 

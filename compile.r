@@ -1,2 +1,2 @@
 options(stancompiled='.')   # or '~/R/stan' etc.
-rms::stanCompile()
+rms::stanCompile(method='rds')

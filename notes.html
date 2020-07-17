@@ -42,6 +42,7 @@
 <li>Frank: The comment about a prior needing to have a kind of universal meaning is very interesting.  The prior should capture the pre-data state of knowledge, and if we have knowledge that uses n (which we’re already conditioning on) but does not use the data in any other way, perhaps this is OK.</li>
 <li>Nathan: In the binomial case with parameter theta, there are multiple ways of defining a noninformative prior, e.g. beta(1,1) is a noninformative prior for theta, the improper beta(0,0) is a noninformative prior for logit(theta) and beta(1/2, 1/2) is the transformation invariant Jeffreys’ noninformative prior. As Gelman et al. mention in their Bayes’ book, there is no clear choice for a vague prior because a density that is ‘flat’ for one parameterization is not for another. There is an analogous relationship between binomial data with a beta prior and multinomial data with a Dirichlet prior. In our case using a concentration parameter of 1 gives equal density to all vectors of category probabilities (when all covars are 0), using a concentration parameter of 0 gives an improper prior that is uniform for the log category probabilities and results in a proper posterior if there is at least 1 observation per category. To match the intercept/cutpoint MLEs, I think we need the concentration parameter that gives a uniform prior for the link function applied to the cumulative category probabilities, i.e. logit(sum(cat. prob)) or probit(sum(cat. prob)). My guess is that the 1/n heuristic and your empirical formula are getting somewhat close to this, but I will spend some time to work through the math. It seems like this may be a situation where because the posterior inference is sensitive to prior choice there is no a perfect solution. We can offer some recommendations for what seems to work.</li>
 </ul>
+<p>Ben Goodrich put a function <code>Pr</code> inside the Stan code. This is used just for checking that probabilities add up to one. You can use <code>rstan::expose_stan_functions('foo.stan')</code> to access those functions from R.</p>
 <h2 id="existing-stan-approaches">Existing <code>Stan</code> Approaches</h2>
 <ul>
 <li>See <a href="ttps://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html">this</a></li>
@@ -194,6 +195,7 @@ zapsmall(cor(cbind(w$Xqr, scale(X[,3], center = TRUE, scale = FALSE))))
 <li><a href="https://mc-stan.org/docs/2_23/stan-users-guide/QR-reparameterization-section.html">Reparameterization</a></li>
 <li><a href="https://mc-stan.org/docs/2_23/stan-users-guide/ordered-logistic-section.html">Ordered logisitic</a></li>
 <li><a href="https://github.com/stan-dev/stan/issues/2377">Conditional parameters</a></li>
+<li><a href="https://mc-stan.org/rstantools/articles">R package development with Stan</a></li>
 </ul>
 <h2 id="especially-relevant-functions">Especially Relevant Functions</h2>
 <table>
@@ -224,6 +226,13 @@ zapsmall(cor(cbind(w$Xqr, scale(X[,3], center = TRUE, scale = FALSE))))
 </table>
 <p>Also study <code>bernoulli_logit</code> and <code>categorical_logit</code>.</p>
 <p>To look up Stan function near-equivalents to R functions use <code>rstan::lookup('ncol')</code> for example.</p>
+<p>Some answers to my coding questions appear <a href="https://discourse.mc-stan.org/t/how-to-declare-and-use-integer-matrices">here</a>, e.g.:</p>
+<ul>
+<li>declaring an argument as an integer matrix: <code>int[,] y</code></li>
+<li>can’t use <code>max()</code> on a matrix; can temporarily (with some overhead) convert using <code>max(to_array_1d(y))</code>.</li>
+<li>nummber of columns in a row vector: <code>int p = cols(X[1])</code></li>
+<li>number of rows in a row vector: <code>size(X)</code></li>
+</ul>
 <h1 id="other-useful-links">Other Useful Links</h1>
 <ul>
 <li><a href="https://discourse.mc-stan.org/t/bias-in-main-effects-for-logistic-model-with-random-intercept-and-small-cluster-sizes">Logistic model with random intercept and small cluster sizes</a></li>
