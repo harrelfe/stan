@@ -121,6 +121,8 @@ In the case where the last variable is randomized, then the correlation would be
 # Prediction With Random Effects
 * Ben Goodrich: Everything about the random effect stuff is easier from a Bayesian perspective, except for one thing: If you want to evaluate the model based on how it is expected to predict new patients (that by definition have not been observed yet), then you have to re-calculate the log-likelihood contributions in generated quantities after numerically integrating out the random effects like the Frequentists do. This is not so bad to code now that Stan has a one-dimensional numerical integration function, but it takes doing.  See https://arxiv.org/abs/1802.04452
 
+<a name="ar1"></a>
+
 # AR(1) Modeling
 * <https://discourse.mc-stan.org/t/migrated-from-google-group-ar-1-logistic-regression-funnel>
 * <https://discourse.mc-stan.org/t/improving-efficiency-when-modeling-autocorrelation>
@@ -143,6 +145,8 @@ Would this specification lead to sampling problems?  Do $\sigma_\gamma$ and $\si
 Ben Goodrich re warnings about Pareto k diagnostics from `loo()`: The `loo()` function is trying to estimate what would happen if 1 patient were dropped from the analysis and predicted conditional on all the other patients. But its importance sampling has infinite variance when the Pareto k for the left-out observation is greater than 1 and has too high variance if the Pareto k is greater than 0.7. The Pareto k pertains to how much the posterior distribution would change if one observation were left out. In these models, if one person were left out the corresponding gamma and that patient's column of eps_raw would revert to their prior distributions because there would no longer be any information in the data to update them with. Thus, this posterior distribution is too sensitive to the particular patients being conditioned on to estimate the expected log predictive density of future patients well.
 
 To overcome this problem, we can do K-fold with K equal to the number of patients or redo the loo calculation to use a likelihood function that integrates the random effects out like in a Frequentist estimator, as described in that Psychometrica article I sent you the link to. But we can still use Stan to first obtain the posterior draws conditional on the random effects.
+
+<a name="ar1h"></a>
 
 FH question on homescedasticity of random effects:  With random effect for subject $i$ at the first time $t=1$ having variance $\sigma^2_\gamma$, we can use the recursive relationship $V(X_t) = \rho^2 V(X_{t-1}) + \sigma^2_\epsilon$ to get variances at other times, where $\sigma^2_\epsilon$ is the within-subject white noise variance.  The variance of the random effect at time $t=2$ is $\rho^2 \sigma^2_\gamma + \sigma^2_\epsilon$ and equating the two successive variances results in $\sigma_\epsilon = \sigma_\gamma \sqrt{1 - \rho^2}$.  The same equation results from equating the variance at $t=3$ to the variance at $t=2$.   So it is reasonable to not make $\sigma_\epsilon$ a free parameter but instead to derive it from $\sigma_\gamma$ and $\rho$?  Would this make posterior sampling behave much better too?
 
