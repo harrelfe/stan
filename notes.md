@@ -182,13 +182,19 @@ The variances of $X_t$ for $t=1,2,3,4$ are: $\sigma^2_\gamma$, $\rho^2 \sigma^2_
 * Assumes equal correlation within subject independent of time spacing
 
 ## Simple Serial Dependence Model on Y Scale
+Using a first-order Markov process, a serial dependence model looks like the following.  Let $Y_0$ denote the baseline version of the ordinal outcome variable $Y$.  Note that follow-up measurements will typically have more levels than $Y_0$ has.  For example, the top category of $Y$ may be death but patients must be alive to enter the study.  This should not present a problem, especially if there is some stability of transition tendencies over time.  Let $g(Y)$ be a function of previous outcome level $Y$.  This function can be a vector function with multiple parameters to estimate.  For example if $Y$ has 3 levels 1, 2, 3, the function could be a saturated one such as $g(Y) = \tau_1 [Y=2] + \tau_2 [Y=3]$ where $[a]$ is 1 if $a$ is true, 0 otherwise.  If $Y$ consisted of a semi-continuous initial range $Y=0, 1, \dots, 20$ and then severe outcomes $Y=21, 22$, one could use a discontinuous linear spline: $g(Y) = \tau_1 Y + \tau_2 [Y=21] + \tau_3 [Y=22]$.  The first order (lag one) serial dependence model would then be, for time $t$,
+
+$$\Pr(Y_t >= y | X, Y_{t-1}) = \text{expit}(\alpha_y + X \beta + g(Y_{t-1}))$$
+
+Pros and cons of this approach are
 * Simple likelihood
+* Estimation process uses the standard univariate proportional odds logistic likelihood function
 * No random effects needed if one can assume that outcomes within subject are conditionally independent given previous outcomes
 * Must have a good portion of the outcome levels measured at baseline to start the process
 * Can handle arbitrary within-subject correlation patterns; this is probably the most general method
 * Not possible to have a single parameter for treatment (such as OR)
 * Can marginalize model predicted values to get **covariate-specific** treatment differences in absolute cumulative risk at a **specific time**
-* On the last point, since Bayes invites us to **not** use parameter point estimates, it may be a good idea **not** to do all the multiplications to obtain the unconditional distribution of Y at a later time point.  Instead, it probably works to use Bayesian posterior predictive distribution to simulate a very large number of subjects (large enough so that simulation error is negligible) from the already-sampled posterior draws of the model parameters, including the lag Y coefficients.  One simulates the first post-baseline measurement of Y from the model, separately for treatment=B and treatment=A and for a given set of covariate values.  Then one uses this simulated value of Y to simulate the next time period's Y, uses this to simulate the next, and so on.  From all the simulated datasets one estimates the posterior probability of a condition by computing the fraction of datasets for which the condition was true, separately by treatment.
+* On the last point, since Bayes invites us to **not** use parameter point estimates, it may be a good idea **not** to do all the multiplications to obtain the unconditional distribution of Y at a later time point.  Instead, it probably works to use the Bayesian posterior predictive distribution to simulate a very large number of subjects (large enough so that simulation error is negligible) from the already-sampled posterior draws of the model parameters, including the lag Y coefficients.  One simulates the first post-baseline measurement of Y from the model, separately for treatment=B and treatment=A and for a given set of covariate values $X$.  Then one uses this simulated value of Y to simulate the next time period's Y, uses this to simulate the next, and so on.  From all the simulated datasets one estimates the posterior probability of a condition by computing the fraction of datasets for which the condition was true, separately by treatment.
 
 <a name="ppo"></a>
 
