@@ -184,9 +184,11 @@ The variances of $X_t$ for $t=1,2,3,4$ are: $\sigma^2_\gamma$, $\rho^2 \sigma^2_
 ## Simple Serial Dependence Model on Y Scale
 * Simple likelihood
 * No random effects needed if one can assume that outcomes within subject are conditionally independent given previous outcomes
-* Can handle arbitrary within-subject correlation patters
+* Must have a good portion of the outcome levels measured at baseline to start the process
+* Can handle arbitrary within-subject correlation patterns; this is probably the most general method
 * Not possible to have a single parameter for treatment (such as OR)
 * Can marginalize model predicted values to get **covariate-specific** treatment differences in absolute cumulative risk at a **specific time**
+* On the last point, since Bayes invites us to **not** use parameter point estimates, it may be a good idea **not** to do all the multiplications to obtain the unconditional distribution of Y at a later time point.  Instead, it probably works to use Bayesian posterior predictive distribution to simulate a very large number of subjects (large enough so that simulation error is negligible) from the already-sampled posterior draws of the model parameters, including the lag Y coefficients.  One simulates the first post-baseline measurement of Y from the model, separately for treatment=B and treatment=A and for a given set of covariate values.  Then one uses this simulated value of Y to simulate the next time period's Y, uses this to simulate the next, and so on.  From all the simulated datasets one estimates the posterior probability of a condition by computing the fraction of datasets for which the condition was true, separately by treatment.
 
 <a name="ppo"></a>
 
