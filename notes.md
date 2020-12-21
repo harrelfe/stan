@@ -186,7 +186,7 @@ Using a first-order Markov process, a serial dependence model looks like the fol
 
 If measurement times are unequally spaced or there are missing outcome measurements at some of the times, the $g$ function can be generalized to account for differing time lags.  For example if there are $d$ days from the last measurement to the current measurement at time $t$ one could use for the first example $g(Y) = \tau_1 [Y=2] + \tau_2 [Y=3] + \tau_3 [Y=2] \times d + \tau_4 [Y=3] \times d$.
 
-For an absorbing state (e.g., $Y=3$), we need to determine whether a partial proportional odds model is needed so that the impact of the absorbing state can be $y$-dependent.
+For an absorbing state (e.g., $Y=3$), we need to determine whether a partial proportional odds model is needed so that the impact of the absorbing state can be $y$-dependent.  Or for an absorbing state at the maximum value of $Y=3$ it may be as simple as $g(Y) = \tau_1 [Y=2] + 100 [Y=3]$ which requires a model offset, not an extra parameter $\tau_2$.
 
 The first order (lag one) serial dependence model for time $t$ for any $g$ would then be
 
