@@ -182,12 +182,18 @@ The variances of $X_t$ for $t=1,2,3,4$ are: $\sigma^2_\gamma$, $\rho^2 \sigma^2_
 * Assumes equal correlation within subject independent of time spacing
 
 ## Simple Serial Dependence Model on Y Scale
-Using a first-order Markov process, a serial dependence model looks like the following.  Let $Y_0$ denote the baseline version of the ordinal outcome variable $Y$.  Note that follow-up measurements will typically have more levels than $Y_0$ has.  For example, the top category of $Y$ may be death but patients must be alive to enter the study.  This should not present a problem, especially if there is some stability of transition tendencies over time.  Let $g(Y)$ be a function of previous outcome level $Y$.  This function can be a vector function with multiple parameters to estimate.  For example if $Y$ has 3 levels 1, 2, 3, the function could be a saturated one such as $g(Y) = \tau_1 [Y=2] + \tau_2 [Y=3]$ where $[a]$ is 1 if $a$ is true, 0 otherwise.  If $Y$ consisted of a semi-continuous initial range $Y=0, 1, \dots, 20$ and then severe outcomes $Y=21, 22$, one could use a discontinuous linear spline: $g(Y) = \tau_1 Y + \tau_2 [Y=21] + \tau_3 [Y=22]$.  The first order (lag one) serial dependence model would then be, for time $t$,
+Using a first-order Markov process, a serial dependence model looks like the following.  Let $Y_0$ denote the baseline version of the ordinal outcome variable $Y$.  Note that follow-up measurements will typically have more levels than $Y_0$ has.  For example, the top category of $Y$ may be death but patients must be alive to enter the study.  This should not present a problem, especially if there is some stability of transition tendencies over time.  Let $g(Y)$ be a function of previous outcome level $Y$.  This function can be a vector function with multiple parameters to estimate.  For example if $Y$ has 3 levels 1, 2, 3, the function could be a saturated one such as $g(Y) = \tau_1 [Y=2] + \tau_2 [Y=3]$ where $[a]$ is 1 if $a$ is true, 0 otherwise.  If $Y$ consisted of a semi-continuous initial range $Y=0, 1, \dots, 20$ and then severe outcomes $Y=21, 22$, one could use a discontinuous linear spline: $g(Y) = \tau_1 Y + \tau_2 [Y=21] + \tau_3 [Y=22]$.
+
+If measurement times are unequally spaced or there are missing outcome measurements at some of the times, the $g$ function can be generalized to account for differing time lags.  For example if there are $d$ days from the last measurement to the current measurement at time $t$ one could use for the first example $g(Y) = \tau_1 [Y=2] + \tau_2 [Y=3] + \tau_3 [Y=2] \times d + \tau_4 [Y=3] \times d$.
+
+For an absorbing state (e.g., $Y=3$), we need to determine whether a partial proportional odds model is needed so that the impact of the absorbing state can be $y$-dependent.
+
+The first order (lag one) serial dependence model for time $t$ for any $g$ would then be
 
 $$\Pr(Y_t >= y | X, Y_{t-1}) = \text{expit}(\alpha_y + X \beta + g(Y_{t-1}))$$
 
 Pros and cons of this approach are
-* Simple likelihood
+
 * Estimation process uses the standard univariate proportional odds logistic likelihood function
 * No random effects needed if one can assume that outcomes within subject are conditionally independent given previous outcomes
 * Must have a good portion of the outcome levels measured at baseline to start the process
@@ -199,7 +205,7 @@ Pros and cons of this approach are
    + B - A differences in cumulative probabilities of $Y \geq y$
    + B:A odds ratios for $Y \geq y$
    + B - A difference in mean or median time $t$ until $Y \geq y$
-   
+
 One would typically pick an important time $t$ and a series of covariate settings for computing such results.
 
 <a name="ppo"></a>
