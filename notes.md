@@ -135,10 +135,18 @@ In the case where the last variable is randomized, then the correlation would be
 
 The equation in the last reference p. 5 allows specification of the random effect at time t without passing through all the previous random effects, so it accounts for unequally spaced and missing time points.  It suggests this model:
 
+* Let $T$ be the integer maximum observation time over all subjects
+* Suppose that observation times are $t=1, \dots, T$
 * Let $\gamma_i$ be a $n(0, \sigma_\gamma$) random effect for the $i$th subject.
-* Let $\epsilon_1, ... \epsilon_T$ be the within-subject white noise that is $n(0, \sigma_w)$, where $T$ is the maximum follow-up time (we may only use the first few of these for a given subject)
-* Then the random effect for subject $i$ at time $t$ is $r_{i,t} = \rho^{t}\gamma_i + \rho^{t-1}\epsilon_1 + \rho^{t-2}\epsilon_2 + ... \epsilon_k$
-* Or since the white noise $\epsilon$ are generated while Stan is running, they will all be defined regardless of which observations are actually observed, so the standard specification should work: $r_{i,1} = \gamma_i, r_{i,2} = \rho r_{i,1} + \epsilon_2, r_{i,3} = \rho r_{i, 2} + \epsilon_3, ...$.
+* Let $\epsilon_{i,1}, ... \epsilon_{i,T}$ be the within-subject white noise
+  for the $i$th subject that is $n(0, \sigma_w)$, where $T$ is the maximum follow-up time (we may only use the first few of these for a given subject)
+* $\epsilon_{i,1} = \gamma_i$ so the usual random effect as generated
+  for a hierarchical (compound symmetric correlation pattern) repeated
+  measures model is the starting white noise for a given subject
+* Then the random effect for subject $i$ at time $t$ is $r_{i,t} = \rho^{t}\gamma_i + \rho^{t-1}\epsilon_{i,1} + \rho^{t-2}\epsilon_{i,2} + ... \epsilon_{i,T}$
+* The random effects must all be defined regardless of which
+  observations are actually observed, so we can re-write the model as
+  using a matrix of random effects $r_{i,1} = \gamma_i, r_{i,2} = \rho r_{i,1} + \epsilon_{i,2}, r_{i,3} = \rho r_{i, 2} + \epsilon_{i,3}, ...$.
 
 Would this specification lead to sampling problems?  Do $\sigma_\gamma$ and $\sigma_w$ compete too much?
 
@@ -149,6 +157,34 @@ To overcome this problem, we can do K-fold with K equal to the number of patient
 <a name="ar1h"></a>
 
 FH question on homescedasticity of random effects:  With random effect for subject $i$ at the first time $t=1$ having variance $\sigma^2_\gamma$, we can use the recursive relationship $V(X_t) = \rho^2 V(X_{t-1}) + \sigma^2_\epsilon$ to get variances at other times, where $\sigma^2_\epsilon$ is the within-subject white noise variance.  The variance of the random effect at time $t=2$ is $\rho^2 \sigma^2_\gamma + \sigma^2_\epsilon$ and equating the two successive variances results in $\sigma_\epsilon = \sigma_\gamma \sqrt{1 - \rho^2}$.  The same equation results from equating the variance at $t=3$ to the variance at $t=2$.   So it is reasonable to not make $\sigma_\epsilon$ a free parameter but instead to derive it from $\sigma_\gamma$ and $\rho$?  Would this make posterior sampling behave much better too?
+
+<a name='serialto'></a>
+
+# Trade-offs for Various Longitudinal Model Formulations
+
+## Lee and Daniels Marginal PO State Transition Model
+* Simple interpretation, with a traditional intention-to-treat treatment effect parameter (odds ratio)
+* Doesn't require random effects to handle within-subject correlation
+* Harder to analyze non-uniform time spacing
+* Likelihood function is not expressible analytically, which adds to computational burden
+
+## AR(1)
+* Simple interpretation
+* Requires random effects
+* Possible posterior sampling problems
+* Hard to achieve high correlations on the raw Y scale, even when serial correlations on the linear predictor (logit) scale is very high.  Must have high white noise variance $\sigma_\epsilon$ to get high correlation on Y within subject.
+
+## Ordinary Random Effects (Random Intercepts)
+* Simple interpretation
+* Requires random effects
+* Assumes equal correlation within subject independent of time spacing
+
+## Simple Serial Dependence Model on Y Scale
+* Simple likelihood
+* No random effects needed if one can assume that outcomes within subject are conditionally independent given previous outcomes
+* Can handle arbitrary within-subject correlation patters
+* Not possible to have a single parameter for treatment (such as OR)
+* Can marginalize model predicted values to get **covariate-specific** treatment differences in absolute cumulative risk at a **specific time**
 
 <a name="ppo"></a>
 

@@ -133,16 +133,49 @@ zapsmall(cor(cbind(w$Xqr, scale(X[,3], center = TRUE, scale = FALSE))))
 </ul>
 <p>The equation in the last reference p. 5 allows specification of the random effect at time t without passing through all the previous random effects, so it accounts for unequally spaced and missing time points. It suggests this model:</p>
 <ul>
+<li>Let <span class="math inline">\(T\)</span> be the integer maximum observation time over all subjects</li>
+<li>Suppose that observation times are <span class="math inline">\(t=1, \dots, T\)</span></li>
 <li>Let <span class="math inline">\(\gamma_i\)</span> be a <span class="math inline">\(n(0, \sigma_\gamma\)</span>) random effect for the <span class="math inline">\(i\)</span>th subject.</li>
-<li>Let <span class="math inline">\(\epsilon_1, ... \epsilon_T\)</span> be the within-subject white noise that is <span class="math inline">\(n(0, \sigma_w)\)</span>, where <span class="math inline">\(T\)</span> is the maximum follow-up time (we may only use the first few of these for a given subject)</li>
-<li>Then the random effect for subject <span class="math inline">\(i\)</span> at time <span class="math inline">\(t\)</span> is <span class="math inline">\(r_{i,t} = \rho^{t}\gamma_i + \rho^{t-1}\epsilon_1 + \rho^{t-2}\epsilon_2 + ... \epsilon_k\)</span></li>
-<li>Or since the white noise <span class="math inline">\(\epsilon\)</span> are generated while Stan is running, they will all be defined regardless of which observations are actually observed, so the standard specification should work: <span class="math inline">\(r_{i,1} = \gamma_i, r_{i,2} = \rho r_{i,1} + \epsilon_2, r_{i,3} = \rho r_{i, 2} + \epsilon_3, ...\)</span>.</li>
+<li>Let <span class="math inline">\(\epsilon_{i,1}, ... \epsilon_{i,T}\)</span> be the within-subject white noise for the <span class="math inline">\(i\)</span>th subject that is <span class="math inline">\(n(0, \sigma_w)\)</span>, where <span class="math inline">\(T\)</span> is the maximum follow-up time (we may only use the first few of these for a given subject)</li>
+<li><span class="math inline">\(\epsilon_{i,1} = \gamma_i\)</span> so the usual random effect as generated for a hierarchical (compound symmetric correlation pattern) repeated measures model is the starting white noise for a given subject</li>
+<li>Then the random effect for subject <span class="math inline">\(i\)</span> at time <span class="math inline">\(t\)</span> is <span class="math inline">\(r_{i,t} = \rho^{t}\gamma_i + \rho^{t-1}\epsilon_{i,1} + \rho^{t-2}\epsilon_{i,2} + ... \epsilon_{i,T}\)</span></li>
+<li>The random effects must all be defined regardless of which observations are actually observed, so we can re-write the model as using a matrix of random effects <span class="math inline">\(r_{i,1} = \gamma_i, r_{i,2} = \rho r_{i,1} + \epsilon_{i,2}, r_{i,3} = \rho r_{i, 2} + \epsilon_{i,3}, ...\)</span>.</li>
 </ul>
 <p>Would this specification lead to sampling problems? Do <span class="math inline">\(\sigma_\gamma\)</span> and <span class="math inline">\(\sigma_w\)</span> compete too much?</p>
 <p>Ben Goodrich re warnings about Pareto k diagnostics from <code>loo()</code>: The <code>loo()</code> function is trying to estimate what would happen if 1 patient were dropped from the analysis and predicted conditional on all the other patients. But its importance sampling has infinite variance when the Pareto k for the left-out observation is greater than 1 and has too high variance if the Pareto k is greater than 0.7. The Pareto k pertains to how much the posterior distribution would change if one observation were left out. In these models, if one person were left out the corresponding gamma and that patient’s column of eps_raw would revert to their prior distributions because there would no longer be any information in the data to update them with. Thus, this posterior distribution is too sensitive to the particular patients being conditioned on to estimate the expected log predictive density of future patients well.</p>
 <p>To overcome this problem, we can do K-fold with K equal to the number of patients or redo the loo calculation to use a likelihood function that integrates the random effects out like in a Frequentist estimator, as described in that Psychometrica article I sent you the link to. But we can still use Stan to first obtain the posterior draws conditional on the random effects.</p>
 <p><a name="ar1h"></a></p>
 <p>FH question on homescedasticity of random effects: With random effect for subject <span class="math inline">\(i\)</span> at the first time <span class="math inline">\(t=1\)</span> having variance <span class="math inline">\(\sigma^2_\gamma\)</span>, we can use the recursive relationship <span class="math inline">\(V(X_t) = \rho^2 V(X_{t-1}) + \sigma^2_\epsilon\)</span> to get variances at other times, where <span class="math inline">\(\sigma^2_\epsilon\)</span> is the within-subject white noise variance. The variance of the random effect at time <span class="math inline">\(t=2\)</span> is <span class="math inline">\(\rho^2 \sigma^2_\gamma + \sigma^2_\epsilon\)</span> and equating the two successive variances results in <span class="math inline">\(\sigma_\epsilon = \sigma_\gamma \sqrt{1 - \rho^2}\)</span>. The same equation results from equating the variance at <span class="math inline">\(t=3\)</span> to the variance at <span class="math inline">\(t=2\)</span>. So it is reasonable to not make <span class="math inline">\(\sigma_\epsilon\)</span> a free parameter but instead to derive it from <span class="math inline">\(\sigma_\gamma\)</span> and <span class="math inline">\(\rho\)</span>? Would this make posterior sampling behave much better too?</p>
+<p><a name='serialto'></a></p>
+<h1 id="trade-offs-for-various-longitudinal-model-formulations">Trade-offs for Various Longitudinal Model Formulations</h1>
+<h2 id="lee-and-daniels-marginal-po-state-transition-model">Lee and Daniels Marginal PO State Transition Model</h2>
+<ul>
+<li>Simple interpretation, with a traditional intention-to-treat treatment effect parameter (odds ratio)</li>
+<li>Doesn’t require random effects to handle within-subject correlation</li>
+<li>Harder to analyze non-uniform time spacing</li>
+<li>Likelihood function is not expressible analytically, which adds to computational burden</li>
+</ul>
+<h2 id="ar1">AR(1)</h2>
+<ul>
+<li>Simple interpretation</li>
+<li>Requires random effects</li>
+<li>Possible posterior sampling problems</li>
+<li>Hard to achieve high correlations on the raw Y scale, even when serial correlations on the linear predictor (logit) scale is very high. Must have high white noise variance <span class="math inline">\(\sigma_\epsilon\)</span> to get high correlation on Y within subject.</li>
+</ul>
+<h2 id="ordinary-random-effects-random-intercepts">Ordinary Random Effects (Random Intercepts)</h2>
+<ul>
+<li>Simple interpretation</li>
+<li>Requires random effects</li>
+<li>Assumes equal correlation within subject independent of time spacing</li>
+</ul>
+<h2 id="simple-serial-dependence-model-on-y-scale">Simple Serial Dependence Model on Y Scale</h2>
+<ul>
+<li>Simple likelihood</li>
+<li>No random effects needed if one can assume that outcomes within subject are conditionally independent given previous outcomes</li>
+<li>Can handle arbitrary within-subject correlation patters</li>
+<li>Not possible to have a single parameter for treatment (such as OR)</li>
+<li>Can marginalize model predicted values to get <strong>covariate-specific</strong> treatment differences in absolute cumulative risk at a <strong>specific time</strong></li>
+</ul>
 <p><a name="ppo"></a></p>
 <h1 id="partial-proportional-odds-model">Partial Proportional Odds Model</h1>
 <p>The <a href="http://hbiostat.org/papers/feh/pet90par.pdf">PPO model</a> of Peterson and Harrell (1990) in its <em>unconstrained</em> form (Eq. (5) of the reference) has this specification for a single observation when <span class="math inline">\(Y=1, 2, ..., k\)</span> when <span class="math inline">\(j &gt; 1\)</span> (the paper uses a different coding, for <span class="math inline">\(Y=0, ..., k\)</span> so their <span class="math inline">\(k\)</span> is our <span class="math inline">\(k-1\)</span>)):</p>
